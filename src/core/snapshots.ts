@@ -29,7 +29,8 @@ export function listFiles(root: string, exclude: string[]): string[] {
     }
     for (const e of entries) {
       if (excluded(e.name, ex)) continue;
-      const r = rel ? path.join(rel, e.name) : e.name;
+      // Relative paths always use "/" (also on Windows), so they compare with what agents report.
+      const r = rel ? `${rel}/${e.name}` : e.name;
       if (e.isDirectory()) walk(r);
       else if (e.isFile() || e.isSymbolicLink()) out.push(r);
     }
@@ -108,7 +109,7 @@ export function diffText(snapshot: string, folder: string, exclude: string[], ma
   for (const c of changes) {
     const a = c.kind === "added" ? "/dev/null" : path.join(snapshot, c.file);
     const b = c.kind === "deleted" ? "/dev/null" : path.join(folder, c.file);
-    const label = c.file.split(path.sep).join("/");
+    const label = c.file;
     if (hasCommand("diff")) {
       const r = spawnSync("diff", ["-u", "--label", `a/${label}`, "--label", `b/${label}`, a, b], {
         encoding: "utf8",

@@ -51,12 +51,6 @@ export function treeSpawnOptions(extra: SpawnOptions = {}): SpawnOptions {
   return { ...extra, detached: !IS_WIN, windowsHide: true };
 }
 
-/** Program + args that run a shell command line: `sh -c` here, `cmd /c` on Windows. */
-export function shellCommand(line: string): { file: string; args: string[] } {
-  if (IS_WIN) return { file: process.env.ComSpec || "cmd.exe", args: ["/d", "/s", "/c", line] };
-  return { file: "sh", args: ["-c", line] };
-}
-
 /** Stop a process and everything it started. */
 export function killTree(pid: number | undefined | null) {
   if (!pid) return;

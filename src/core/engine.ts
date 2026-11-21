@@ -54,7 +54,7 @@ import {
   takeSnapshot,
 } from "./snapshots.ts";
 import { ENDING_TOOLS, TOOLS } from "./tools.ts";
-import { commandFor, hasCommand, IS_WIN, shellCommand, treeSpawnOptions } from "./platform.ts";
+import { commandFor, hasCommand, IS_WIN, treeSpawnOptions } from "./platform.ts";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const MCP_SCRIPT = path.resolve(HERE, "../mcp.ts");
@@ -817,8 +817,8 @@ export class Engine {
     try {
       for (const command of checks) {
         const r = await new Promise<{ ok: boolean; output: string }>((resolve) => {
-          const sh = shellCommand(command);
-          const child = spawn(sh.file, sh.args, { ...treeSpawnOptions(), cwd: p.path, env: { ...process.env, CI: "1" } });
+          // Node's own shell handling quotes correctly for sh and cmd.exe alike.
+          const child = spawn(command, { ...treeSpawnOptions(), shell: true, cwd: p.path, env: { ...process.env, CI: "1" } });
           if (child.pid) pids.add(child.pid);
           let buf = "";
           const add = (c: Buffer) => {
