@@ -1,0 +1,15 @@
+{
+  "name": "northern-lights-app",
+  "productName": "Northern Lights",
+  "version": "0.2.0",
+  "description": "Mac app for Northern Lights: a window onto the local engine, which it starts for you.",
+  "private": true,
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "sh build.sh"
+  },
+  "devDependencies": {
+    "electron": "45.2.3"
+  }
+}

@@ -1,0 +1,17 @@
+#!/bin/sh
+# Launcher: finds a Node new enough to run TypeScript directly (23.6+),
+# so the command works even when nvm puts an older Node first on PATH.
+set -e
+self="$0"
+while [ -L "$self" ]; do
+  target=$(readlink "$self")
+  case "$target" in /*) self="$target" ;; *) self="$(dirname "$self")/$target" ;; esac
+done
+root="$(cd "$(dirname "$self")/.." && pwd)"
+
+ok() { "$1" -e 'const [a,b]=process.versions.node.split(".").map(Number);process.exit(a>23||(a===23&&b>=6)?0:1)' 2>/dev/null; }
+for n in "$NL_NODE" "$(command -v node 2>/dev/null)" /opt/homebrew/bin/node /usr/local/bin/node; do
+  if [ -n "$n" ] && [ -x "$n" ] && ok "$n"; then exec "$n" "$root/src/cli.ts" "$@"; fi
+done
+echo "northern-lights needs Node 23.6 or newer (found: $(node --version 2>/dev/null || echo none)). Set NL_NODE to a newer node." >&2
+exit 1

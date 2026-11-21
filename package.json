@@ -1,0 +1,22 @@
+{
+  "name": "northern-lights",
+  "version": "0.1.0",
+  "description": "A task board where AI coding agents work missions one task at a time.",
+  "type": "module",
+  "private": true,
+  "bin": {
+    "northern-lights": "bin/northern-lights"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "serve": "node src/cli.ts serve",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test --test-concurrency=1 test/*.test.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "typescript": "^7.0.2"
+  }
+}

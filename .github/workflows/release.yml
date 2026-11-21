@@ -1,0 +1,148 @@
+name: Release
+
+# Push a tag like v0.2.1 (or run this by hand with a version) to build Northern Lights for
+# macOS (Apple Silicon + Intel), Windows and Linux, smoke-test each on its own OS, and publish a GitHub Release.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release, e.g. 0.2.1"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  test:
+    uses: ./.github/workflows/ci.yml
+
+  package:
+    name: Build packages
+    needs: test
+    runs-on: macos-15
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+      - id: v
+        name: Work out the version
+        run: |
+          V="${{ inputs.version || github.ref_name }}"
+          V="${V#v}"
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          cd app && npm version "$V" --no-git-tag-version --allow-same-version
+      - name: Install
+        run: cd app && npm ci --no-audit --no-fund
+      - name: macOS (Apple Silicon)
+        run: cd app && ARCH=arm64 sh package.sh
+      - name: macOS (Intel)
+        run: cd app && ARCH=x86_64 sh package.sh
+      - name: Windows (x64)
+        run: cd app && PLATFORM=win32 ARCH=x64 sh package-other.sh
+      - name: Linux (x64)
+        run: cd app && PLATFORM=linux ARCH=x64 sh package-other.sh
+      - name: Check the Mac packages
+        run: |
+          for a in arm64 x86_64; do
+            app="app/dist/$a/Northern Lights/Northern Lights.app"
+            codesign --verify --deep "$app"
+            echo "$a: $(lipo -archs "$app/Contents/MacOS/Electron")"
+          done
+          ls -lh app/dist/*.zip app/dist/*.tar.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: packages
+          path: |
+            app/dist/*.zip
+            app/dist/*.tar.gz
+          if-no-files-found: error
+          compression-level: 0
+
+  smoke:
+    name: Smoke test (${{ matrix.name }})
+    needs: package
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS
+            os: macos-15
+          - name: Linux
+            os: ubuntu-latest
+          - name: Windows
+            os: windows-latest
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: actions/download-artifact@v4
+        with:
+          name: packages
+          path: packages
+      - name: Unpack and run the bundled engine
+        run: |
+          V="${{ needs.package.outputs.version }}"
+          mkdir -p unpacked && cd unpacked
+          case "${{ matrix.name }}" in
+            macOS)
+              ditto -x -k "../packages/Northern-Lights-$V-macOS-arm64.zip" .
+              APP="Northern Lights/Northern Lights.app/Contents"
+              BIN="$APP/MacOS/Electron"; CLI="$APP/Resources/engine/src/cli.ts" ;;
+            Linux)
+              tar -xzf "../packages/Northern-Lights-$V-linux-x64.tar.gz"
+              BIN="Northern Lights/northern-lights"; CLI="Northern Lights/resources/engine/src/cli.ts" ;;
+            Windows)
+              unzip -q "../packages/Northern-Lights-$V-windows-x64.zip" || 7z x -y "../packages/Northern-Lights-$V-windows-x64.zip" >/dev/null
+              BIN="Northern Lights/Northern Lights.exe"; CLI="Northern Lights/resources/engine/src/cli.ts" ;;
+          esac
+          HERE=$(pwd -W 2>/dev/null || pwd)   # Windows paths for Node on Windows
+          node ../app/smoke.mjs "$HERE/$BIN" "$HERE/$CLI"
+
+  publish:
+    name: Publish release
+    needs: [package, smoke]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: packages
+          path: packages
+      - name: Create the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          V: ${{ needs.package.outputs.version }}
+        run: |
+          TAG="v$V"
+          cat > notes.md <<NOTES
+          ## Northern Lights $V
+
+          Pick the download for your computer, unpack it, and read *How to open.txt* inside.
+
+          | Computer | Download |
+          |---|---|
+          | Mac with Apple Silicon (M1 and newer) | \`Northern-Lights-$V-macOS-arm64.zip\` |
+          | Mac with Intel | \`Northern-Lights-$V-macOS-x86_64.zip\` |
+          | Windows 10/11 (64-bit) | \`Northern-Lights-$V-windows-x64.zip\` |
+          | Linux (64-bit) | \`Northern-Lights-$V-linux-x64.tar.gz\` |
+
+          These test builds aren't signed by Apple or Microsoft, so the first launch needs one extra click (see *How to open.txt*).
+          You need Claude Code (signed in) and/or Antigravity's \`agy\`. Optional: \`agent-browser\` for UI checks with screenshots.
+          NOTES
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" packages/* --clobber
+          else
+            gh release create "$TAG" packages/* --target "$GITHUB_SHA" --title "Northern Lights $V" --notes-file notes.md --generate-notes
+          fi
