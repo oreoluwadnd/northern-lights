@@ -5,7 +5,27 @@ import { hasCommand } from "./platform.ts";
 import { homeDir } from "./config.ts";
 
 /** Always excluded: our own folder, and git's (we leave git alone). */
-export const ALWAYS_EXCLUDE = [".northern-lights", ".git"];
+/**
+ * Never part of a task's changes, in any project (even if project.yaml lists its own excludes):
+ * our own folder, git, and caches that test/lint tools rewrite whenever they run.
+ */
+export const ALWAYS_EXCLUDE = [
+  ".northern-lights",
+  ".git",
+  ".DS_Store",
+  "__pycache__",
+  ".pytest_cache",
+  ".mypy_cache",
+  ".ruff_cache",
+  ".hypothesis",
+  ".tox",
+  ".nox",
+  ".coverage",
+  ".eslintcache",
+  ".parcel-cache",
+  ".turbo",
+  ".cache",
+];
 
 export interface SnapshotOptions {
   exclude: string[];

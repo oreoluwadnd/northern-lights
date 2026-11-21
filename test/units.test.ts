@@ -201,3 +201,17 @@ test("built-in diff (for Windows): patches apply exactly and match diff -u on si
   const sys = spawnSync("diff", ["-u", "--label", "a/f", "--label", "b/f", path.join(dir, "a"), path.join(dir, "b")], { encoding: "utf8" });
   if (sys.status !== null && sys.stdout) assert.equal(unifiedDiff(a, b, "f"), sys.stdout);
 });
+
+test("tool caches (pytest, mypy, ruff…) never count as a task's changes", async () => {
+  const { takeSnapshot, changedFiles } = await import("../src/core/snapshots.ts");
+  const proj = fs.mkdtempSync(path.join(os.tmpdir(), "nl-cache-"));
+  fs.writeFileSync(path.join(proj, "app.py"), "x = 1\n");
+  process.env.NL_HOME = fs.mkdtempSync(path.join(os.tmpdir(), "nl-home-"));
+  const snap = takeSnapshot(proj, "p", "base", { exclude: [] });
+  fs.mkdirSync(path.join(proj, ".pytest_cache", "v", "cache"), { recursive: true });
+  fs.writeFileSync(path.join(proj, ".pytest_cache", "v", "cache", "nodeids"), "[]");
+  fs.mkdirSync(path.join(proj, "src", ".mypy_cache"), { recursive: true });
+  fs.writeFileSync(path.join(proj, "src", ".mypy_cache", "x.json"), "{}");
+  fs.writeFileSync(path.join(proj, "app.py"), "x = 2\n");
+  assert.deepEqual(changedFiles(snap, proj, []).map((c) => c.file), ["app.py"]);
+});
