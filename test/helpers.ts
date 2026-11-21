@@ -57,10 +57,20 @@ export async function setup(plan: unknown, opts: { extraEnv?: Record<string, str
         // Simulate a crash: kill agents, close the socket, no clean-shutdown marker.
         for (const r of env.s.engine.status().runs) {
           const row = env.s.engine.db.prepare("select pid from runs where id = ?").get(r.id) as { pid: number };
-          killTree(row.pid);
+          // A crash: kill hard and at once (no graceful stop).
+          if (process.platform === "win32") killTree(row.pid);
+          else {
+            try {
+              process.kill(-row.pid, "SIGKILL");
+            } catch {}
+          }
         }
         (env.s.engine as any).timers.forEach((t: NodeJS.Timeout) => clearInterval(t));
-        for (const live of (env.s.engine as any).live.values()) live.handle?.child.removeAllListeners();
+        for (const live of (env.s.engine as any).live.values()) {
+          live.handle?.child.removeAllListeners();
+          live.handle?.child.stdout?.removeAllListeners();
+          live.handle?.child.stderr?.removeAllListeners();
+        }
         (env.s.engine as any).live.clear();
         env.s.server.closeAllConnections?.();
         await new Promise<void>((r) => env.s.server.close(() => r()));
